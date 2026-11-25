@@ -589,6 +589,14 @@ const P={
  fb:{name:'Facebook',color:'#1877F2',limit:63206,maxImg:10,icon:'<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M14 8.5V6.8c0-.8.5-1 1-1h2.5V2H14c-2.8 0-4 2-4 4.5v2H7V12h3v10h4V12h2.7l.6-3.5z"/></svg>'},
  pin:{name:'Pinterest',color:'#E60023',limit:500,maxImg:5,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>'}
 };
+const COMPOSERS={
+ ig:t=>'https://www.instagram.com/',
+ tg:(t,u)=>'https://t.me/share/url?url='+encodeURIComponent(u||'')+'&text='+encodeURIComponent(t.slice(0,3900)),
+ vk:t=>'https://vk.com/feed',
+ x:t=>'https://x.com/intent/post?text='+encodeURIComponent(t.slice(0,279)),
+ fb:(t,u)=>u?'https://www.facebook.com/sharer/sharer.php?u='+encodeURIComponent(u)+'&quote='+encodeURIComponent(t.slice(0,300)):'https://www.facebook.com/',
+ pin:t=>'https://www.pinterest.com/pin-builder/'
+};
 const CATS=[
  {id:'all',name:'Все'},{id:'custom',name:'Мои'},{id:'interior',name:'Интерьеры',kw:'interior'},
  {id:'food',name:'Еда',kw:'food'},{id:'fashion',name:'Стиль',kw:'fashion'},{id:'nature',name:'Природа',kw:'nature'},
@@ -777,7 +785,7 @@ function renderAttachments(){
 }
 function renderTagRow(){
  const c=cur();if(!c)return;
- $('#tagRow').innerHTML=c.text?c.text.match(/#\S+/g).slice(0,12).map(t=>`<button class="tag" data-act="ins" data-v="${esc(t)}">${esc(t)}</button>`).join(''):'';
+ $('#tagRow').innerHTML=c.text?(c.text.match(/#\S+/g)||[]).slice(0,12).map(t=>`<button class="tag" data-act="ins" data-v="${esc(t)}">${esc(t)}</button>`).join(''):'';
 }
 function updateCounters(){
  const c=cur();if(!c)return;
@@ -1137,6 +1145,17 @@ function lightbox(im,idx,total){
     <button class="btn danger block" data-act="rmimgmodal" data-id="${im.id}">${ICON.trash}Удалить из поста</button>
    </div></div></div>`);
 }
+function openComposers(c){
+ const remote=c.images.map(i=>i.src).find(s=>/^https?:\/\//i.test(s));
+ const items=c.platforms.filter(x=>P[x]&&COMPOSERS[x]);
+ if(!items.length){toast('Нет площадок','Подключите хотя бы одну','warn');return;}
+ openModal(`<div class="mhead"><h3 style="font-size:14px">Публикация в редакторах соцсетей</h3><div class="spacer"></div><button class="icobtn" data-act="closemodal" aria-label="Закрыть">${ICON.x}</button></div>
+  <div class="mbody" style="width:min(480px,92vw)">
+   <div class="hint" style="margin-bottom:12px">Текст скопирован в буфер обмена — в каждом редакторе вставьте его (Ctrl+V) и приложите картинки. Без официального API соцсети панель не может загрузить файлы и нажать «Опубликовать» за вас — финальный клик за вами.</div>
+   <div style="display:grid;gap:7px">${items.map(x=>`<button class="btn block" data-act="opencomp" data-id="${x}" style="justify-content:flex-start">${P[x].icon}${P[x].name}<span class="hint" style="margin-left:auto">${x==='x'?'текст до 280 симв.':x==='fb'&&remote?'с картинкой':''}</span></button>`).join('')}</div>
+   <button class="btn ghost block" style="margin-top:10px" data-act="copytext">${ICON.copy}Скопировать текст ещё раз</button>
+  </div>`);
+}
 function publish(){
  const c=cur(),v=validate();
  if(!v.ok){toast('Нельзя опубликовать',v.msg,'bad');SND.err();return;}
@@ -1147,7 +1166,9 @@ function publish(){
  setTimeout(()=>{
   const b=$('#pubBtn');if(b){b.disabled=false;}
   updateCounters();
-  toast('Опубликовано везде 🎉',c.platforms.map(k=>P[k]?P[k].name:k).join(' · '),'ok',{label:'В библиотеку',fn:()=>{setView('library');openDrawer(c.id);}});
+  const txt=c.text||'';
+  if(navigator.clipboard&&navigator.clipboard.writeText&&txt)navigator.clipboard.writeText(txt).catch(()=>fallbackCopy(txt));
+  toast('Опубликовано везде 🎉',c.platforms.map(k=>P[k]?P[k].name:k).join(' · '),'ok',{label:'Открыть редакторы',fn:()=>openComposers(c)});
  },650);
 }
 function schedule(){
@@ -1546,6 +1567,8 @@ document.addEventListener('click',e=>{
   case'pvprev':{const c=cur();S.previewIdx=(S.previewIdx-1+c.images.length)%c.images.length;renderPreview();SND.tap();break;}
   case'pvnext':{const c=cur();S.previewIdx=(S.previewIdx+1)%c.images.length;renderPreview();SND.tap();break;}
   case'publish':publish();break;
+  case'opencomp':{const cc=cur(),t2=cc.text||'',remote=cc.images.map(i=>i.src).find(s=>/^https?:\/\//i.test(s));window.open(COMPOSERS[id](t2,remote),'_blank');SND.tap();break;}
+  case'opencomps':{const cc=cur(),t2=cc.text||'';if(t2&&navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t2).catch(()=>fallbackCopy(t2));openComposers(cc);break;}
   case'schedule':schedule();break;
   case'savedraft':{const c=cur();c.status='draft';c.scheduledAt=null;touch();renderAll();save();SND.save();toast('Черновик сохранён','','ok');break;}
   case'quick':{const d=new Date();
@@ -1576,6 +1599,7 @@ document.addEventListener('click',e=>{
    <button data-act="importurl">${ICON.link}Импорт пина по ссылке</button>
    <button data-act="upload">${ICON.up}Загрузить с устройства</button>
    <button data-act="copytext">${ICON.copy}Копировать текст</button>
+   <button data-act="opencomps">${ICON.up}Открыть редакторы соцсетей</button>
    <button data-act="dltxt">${ICON.down}Скачать .txt</button>
    <button data-act="exportcur">${ICON.down}Экспорт JSON</button>
    <button data-act="dupcur">${ICON.copy}Дублировать пост</button>
