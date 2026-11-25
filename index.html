@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Пост-панель — конструктор постов для соцсетей</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><span class="brand-icon">✦</span> Пост-панель</div>
+  <nav class="tabs">
+    <button class="tab active" data-view="composer" type="button">✍️ Редактор</button>
+    <button class="tab" data-view="gallery" type="button">🖼️ <span id="tabGalleryCount">Галерея</span></button>
+    <button class="tab" data-view="history" type="button">🕘 История</button>
+  </nav>
+  <div class="top-actions">
+    <span id="saveStatus" class="save-status"></span>
+    <button id="settingsBtn" class="btn ghost small" type="button">⚙️ Настройки</button>
+  </div>
+</header>
+
+<main>
+
+  <section id="view-composer" class="view active">
+    <div class="composer-grid">
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Текст поста</h2>
+          <div class="head-tools">
+            <button id="aiBtn" class="btn accent small" type="button">✨ Варианты от ИИ</button>
+            <button id="aiByImageBtn" class="btn ghost small" type="button">🪄 По картинке</button>
+            <div class="emoji-wrap">
+              <button id="emojiBtn" class="btn ghost small" type="button">😊</button>
+              <div id="emojiPicker" class="emoji-picker hidden"></div>
+            </div>
+          </div>
+        </div>
+
+        <textarea id="postText" placeholder="Напишите текст поста или положитесь на ИИ..." rows="11"></textarea>
+
+        <div class="hashtag-row">
+          <input id="hashtagInput" type="text" placeholder="Хэштеги через пробел или запятую">
+          <button id="addHashtagsBtn" class="btn small" type="button">Добавить</button>
+        </div>
+
+        <div class="platforms">
+          <div id="platformList" class="platform-chips"></div>
+        </div>
+
+        <div class="attach-strip-wrap">
+          <div class="attach-label">Картинки поста</div>
+          <div id="attachStrip" class="attach-strip"></div>
+          <div class="attach-add">
+            <button id="cFileBtn" class="btn ghost small" type="button">📁 Файлы</button>
+            <input id="cFileInput" type="file" accept="image/*" multiple hidden>
+            <button id="cGalleryBtn" class="btn ghost small" type="button">🗂️ Из галереи</button>
+          </div>
+        </div>
+
+        <div class="composer-actions">
+          <button id="copyTextBtn" class="btn" type="button">📋 Копировать</button>
+          <button id="downloadTextBtn" class="btn ghost" type="button">⬇️ .txt</button>
+          <span class="spacer"></span>
+          <button id="saveDraftBtn" class="btn ghost" type="button">💾 Черновик</button>
+          <button id="draftsBtn" class="btn ghost" type="button">📚 <span id="draftCount">0</span></button>
+          <button id="toHistoryBtn" class="btn ghost" type="button">🕘 В историю</button>
+        </div>
+      </div>
+
+      <div class="panel preview-panel">
+        <div class="panel-head">
+          <h2>Предпросмотр</h2>
+          <div id="previewTabs" class="preview-tabs"></div>
+        </div>
+        <div id="previewCard" class="preview-card"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="view-gallery" class="view">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Галерея</h2>
+        <div class="head-tools">
+          <select id="filterSelect" class="select">
+            <option value="all">Все картинки</option>
+            <option value="fav">⭐ Избранное</option>
+          </select>
+          <button id="newCollectionBtn" class="btn ghost small" type="button">＋ Коллекция</button>
+        </div>
+      </div>
+
+      <div class="pin-import">
+        <div class="pin-row">
+          <input id="pinUrl" type="text" placeholder="Ссылка на пин Pinterest (pinterest.com/pin/...) или на картинку">
+          <button id="pinAddBtn" class="btn accent" type="button">📌 Импорт</button>
+        </div>
+        <p class="hint">Панель вытянет картинку из пина, покажет предпросмотр и спросит, что сохранить.</p>
+      </div>
+
+      <div id="dropZone" class="dropzone">
+        <p>Перетащите картинки сюда, <button id="gFileBtn" class="linklike" type="button">выберите файлы</button> или вставьте из буфера (Ctrl+V)</p>
+        <input id="gFileInput" type="file" accept="image/*" multiple hidden>
+      </div>
+
+      <div id="masonry" class="masonry"></div>
+      <div id="galleryEmpty" class="empty">Пока пусто. Добавьте картинки из Pinterest или с компьютера, а потом соберите из них пост ✨</div>
+    </div>
+  </section>
+
+  <section id="view-history" class="view">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>История публикаций</h2>
+        <button id="clearHistoryBtn" class="btn ghost small" type="button">Очистить</button>
+      </div>
+      <div id="historyList" class="history-list"></div>
+      <div id="historyEmpty" class="empty">Здесь появятся опубликованные посты. Нажмите «🕘 В историю» в редакторе.</div>
+    </div>
+  </section>
+
+</main>
+
+<div id="settingsModal" class="modal-backdrop hidden">
+  <div class="modal wide">
+    <div class="modal-head"><h3>⚙️ Настройки ИИ</h3><button class="modal-x" data-close type="button">✕</button></div>
+    <div class="modal-body">
+      <label class="field"><span>API Base URL (OpenAI-совместимый)</span>
+        <input id="sApiBase" type="text" placeholder="https://api.openai.com/v1">
+      </label>
+      <label class="field"><span>API-ключ</span>
+        <input id="sApiKey" type="password" placeholder="sk-...">
+      </label>
+      <label class="field"><span>Модель</span>
+        <input id="sModel" type="text" list="modelPresets" placeholder="gpt-4o-mini">
+        <datalist id="modelPresets">
+          <option value="gpt-4o-mini"></option>
+          <option value="gpt-4o"></option>
+          <option value="gpt-4.1-mini"></option>
+          <option value="deepseek-chat"></option>
+        </datalist>
+      </label>
+      <div class="field-row">
+        <label class="field"><span>Вариантов текста</span>
+          <select id="sVariants" class="select">
+            <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+          </select>
+        </label>
+        <label class="field"><span>Тон поста</span>
+          <select id="sTone" class="select">
+            <option value="дружелюбный и лёгкий">Дружелюбный</option>
+            <option value="экспертный и деловой">Экспертный</option>
+            <option value="продающий, с призывом к действию">Продающий</option>
+            <option value="весёлый, с юмором">С юмором</option>
+            <option value="короткий и ёмкий">Короткий</option>
+          </select>
+        </label>
+      </div>
+      <p class="hint">Ключ хранится только в вашем браузере (localStorage). Для «По картинке» нужна модель с поддержкой изображений (vision), например gpt-4o.</p>
+    </div>
+    <div class="modal-foot">
+      <button id="settingsSave" class="btn accent" type="button">Сохранить</button>
+      <button id="clearAllBtn" class="btn danger ghost" type="button">Очистить все данные</button>
+    </div>
+  </div>
+</div>
+
+<div id="aiModal" class="modal-backdrop hidden">
+  <div class="modal wide">
+    <div class="modal-head"><h3>✨ Варианты поста</h3><button class="modal-x" data-close type="button">✕</button></div>
+    <div id="aiBody" class="modal-body ai-body"><div class="ai-loading">Генерируем варианты...</div></div>
+    <div class="modal-foot">
+      <button id="aiRegenerate" class="btn ghost" type="button">🔄 Ещё варианты</button>
+    </div>
+  </div>
+</div>
+
+<div id="pinPreviewModal" class="modal-backdrop hidden">
+  <div class="modal wide">
+    <div class="modal-head"><h3>📌 Найдено в пине</h3><button class="modal-x" data-close type="button">✕</button></div>
+    <div id="pinPreviewBody" class="modal-body pin-preview"></div>
+    <div class="modal-foot">
+      <button id="pinConfirmAdd" class="btn accent" type="button">Добавить выбранное</button>
+    </div>
+  </div>
+</div>
+
+<div id="galleryPickerModal" class="modal-backdrop hidden">
+  <div class="modal wide">
+    <div class="modal-head"><h3>🗂️ Выберите картинки для поста</h3><button class="modal-x" data-close type="button">✕</button></div>
+    <div id="galleryPickerBody" class="modal-body picker-grid"></div>
+    <div class="modal-foot">
+      <button id="galleryPickerApply" class="btn accent" type="button">Готово</button>
+    </div>
+  </div>
+</div>
+
+<div id="draftsModal" class="modal-backdrop hidden">
+  <div class="modal wide">
+    <div class="modal-head"><h3>📚 Черновики</h3><button class="modal-x" data-close type="button">✕</button></div>
+    <div id="draftsList" class="modal-body drafts-list"></div>
+  </div>
+</div>
+
+<div id="collectionsModal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-head"><h3>🏷️ Коллекции картинки</h3><button class="modal-x" data-close type="button">✕</button></div>
+    <div id="collectionsBody" class="modal-body collections-body"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="ai.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
