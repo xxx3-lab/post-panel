@@ -589,6 +589,14 @@ const P={
  fb:{name:'Facebook',color:'#1877F2',limit:63206,maxImg:10,icon:'<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M14 8.5V6.8c0-.8.5-1 1-1h2.5V2H14c-2.8 0-4 2-4 4.5v2H7V12h3v10h4V12h2.7l.6-3.5z"/></svg>'},
  pin:{name:'Pinterest',color:'#E60023',limit:500,maxImg:5,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>'}
 };
+const COMPOSERS={
+ ig:t=>'https://www.instagram.com/',
+ tg:(t,u)=>'https://t.me/share/url?url='+encodeURIComponent(u||'')+'&text='+encodeURIComponent(t.slice(0,3900)),
+ vk:t=>'https://vk.com/feed',
+ x:t=>'https://x.com/intent/post?text='+encodeURIComponent(t.slice(0,279)),
+ fb:(t,u)=>u?'https://www.facebook.com/sharer/sharer.php?u='+encodeURIComponent(u)+'&quote='+encodeURIComponent(t.slice(0,300)):'https://www.facebook.com/',
+ pin:t=>'https://www.pinterest.com/pin-builder/'
+};
 const CATS=[
  {id:'all',name:'Все'},{id:'custom',name:'Мои'},{id:'interior',name:'Интерьеры',kw:'interior'},
  {id:'food',name:'Еда',kw:'food'},{id:'fashion',name:'Стиль',kw:'fashion'},{id:'nature',name:'Природа',kw:'nature'},
@@ -656,7 +664,8 @@ const S={posts:[],current:null,view:'studio',sideTab:'all',sideQ:'',cat:'all',pi
  savedPins:[],connected:{ig:true,tg:true,vk:true,x:true,fb:true,pin:true},theme:'dark',sound:true,
  previewPlat:'ig',previewIdx:0,drawerId:null,lib:{q:'',status:'all',plats:[],sort:'updated',onlyImg:false,layout:'grid'},
  views:[],selection:new Set(),
- settings:{apiBase:'https://api.openai.com/v1',apiKey:'',model:'gpt-4o-mini',variants:3,tone:'дружелюбный и лёгкий'}};
+ settings:{apiBase:'https://api.openai.com/v1',apiKey:'',model:'gpt-4o-mini',variants:3,tone:'дружелюбный и лёгкий',pinterest:{appId:'',appSecret:'',redirect:''}},
+ pinAuth:{token:'',refresh:'',expiresAt:0,user:null}};
 let customPins=[];
 let PINMAP={};
 function rebuildMap(){PINMAP={};PINS.forEach(p=>PINMAP[p.id]=p);}
@@ -664,7 +673,7 @@ rebuildMap();
 function save(){
  try{localStorage.setItem('pinpost.v1',JSON.stringify({
   posts:S.posts,current:S.current,savedPins:S.savedPins,connected:S.connected,theme:S.theme,sound:S.sound,
-  lib:S.lib,views:S.views,previewPlat:S.previewPlat,settings:S.settings,customPins
+  lib:S.lib,views:S.views,previewPlat:S.previewPlat,settings:S.settings,pinAuth:S.pinAuth,customPins
  }));}catch(e){}
 }
 function load(){
@@ -676,6 +685,8 @@ function load(){
   S.theme=d.theme||'dark';S.sound=d.sound!==false;
   S.lib=Object.assign(S.lib,d.lib||{});S.views=d.views||[];
   S.settings=Object.assign({},S.settings,d.settings||{});
+  S.settings.pinterest=Object.assign({appId:'',appSecret:'',redirect:''},(S.settings.pinterest||{}),(d.settings&&d.settings.pinterest)||{});
+  S.pinAuth=Object.assign({},S.pinAuth,d.pinAuth||{});
   customPins=(d.customPins||[]).filter(p=>p&&p.id&&p.src);
   customPins.forEach(p=>{p.cat='custom';PINS.push(p);});
   rebuildMap();
@@ -744,7 +755,7 @@ function renderSidebar(){
  $('#acctList').innerHTML=Object.keys(P).map(k=>{
   const on=!!S.connected[k];
   return `<div class="acct"><span class="ai" style="background:${P[k].color}">${P[k].icon}</span>
-   <span style="flex:1;min-width:0"><span class="an">${P[k].name}</span><br><span class="ah">${on?'подключён · лимит '+P[k].limit.toLocaleString('ru-RU')+' симв.':'отключён'}</span></span>
+   <span style="flex:1;min-width:0"><span class="an">${P[k].name}</span><br><span class="ah">${on?(k==='pin'&&S.pinAuth&&S.pinAuth.user?'@'+esc(S.pinAuth.user)+' · API':'подключён · лимит '+P[k].limit.toLocaleString('ru-RU')+' симв.'):'отключён'}</span></span>
    <span class="sw" role="switch" aria-checked="${on}" data-act="connect" data-id="${k}"></span></div>`;
  }).join('');
 }
@@ -777,7 +788,7 @@ function renderAttachments(){
 }
 function renderTagRow(){
  const c=cur();if(!c)return;
- $('#tagRow').innerHTML=c.text?c.text.match(/#\S+/g).slice(0,12).map(t=>`<button class="tag" data-act="ins" data-v="${esc(t)}">${esc(t)}</button>`).join(''):'';
+ $('#tagRow').innerHTML=c.text?(c.text.match(/#\S+/g)||[]).slice(0,12).map(t=>`<button class="tag" data-act="ins" data-v="${esc(t)}">${esc(t)}</button>`).join(''):'';
 }
 function updateCounters(){
  const c=cur();if(!c)return;
@@ -1137,6 +1148,86 @@ function lightbox(im,idx,total){
     <button class="btn danger block" data-act="rmimgmodal" data-id="${im.id}">${ICON.trash}Удалить из поста</button>
    </div></div></div>`);
 }
+function pinRedirect(){
+ const r=(S.settings.pinterest&&S.settings.pinterest.redirect||'').trim();
+ if(r)return r;
+ return location.protocol.startsWith('http')?location.origin+location.pathname:'https://xxx3-lab.github.io/post-panel/';
+}
+async function fetchWithT(url,opts,ms){
+ const c=new AbortController();const t=setTimeout(()=>c.abort(),ms||30000);
+ try{return await fetch(url,Object.assign({},opts,{signal:c.signal}));}finally{clearTimeout(t);}
+}
+async function pinApi(path,opts){
+ const t=S.pinAuth||{};
+ if(!t.token)throw new Error('нет токена — подключите аккаунт Pinterest в настройках');
+ const r=await fetchWithT('https://api.pinterest.com/v5'+path,Object.assign({},opts,{headers:Object.assign({'Authorization':'Bearer '+t.token},(opts&&opts.headers)||{})}),30000);
+ const txt=await r.text();let j={};try{j=JSON.parse(txt)}catch(e){}
+ if(!r.ok)throw new Error(j.message||j.detail||('HTTP '+r.status+' '+txt.slice(0,120)));
+ return j;
+}
+function startPinOauth(){
+ const pa=$('#stPinApp'),psd=$('#stPinSecret'),pr=$('#stPinRedirect');
+ if(pa)S.settings.pinterest={appId:pa.value.trim(),appSecret:psd&&psd.value.trim()||S.settings.pinterest.appSecret,redirect:pr&&pr.value.trim()||''};
+ const ps=S.settings.pinterest||{};
+ if(!ps.appId||!ps.appSecret){toast('Нужны App ID и secret','Создайте бесплатное приложение на developers.pinterest.com и вставьте их в поля выше','warn');return;}
+ save();
+ const st=uid();try{sessionStorage.setItem('pinpost_oauth_state',st);}catch(e){}
+ const scope='boards:read,boards:write,pins:read,pins:write,user_accounts:read';
+ const url='https://www.pinterest.com/oauth/?response_type=code&client_id='+encodeURIComponent(ps.appId)+'&redirect_uri='+encodeURIComponent(pinRedirect())+'&scope='+encodeURIComponent(scope)+'&state='+st;
+ window.open(url,'_blank');
+ toast('Открываю Pinterest','Войдите и нажмите «Разрешить» — панель получит токен автоматически','info');
+}
+async function pinExchange(code){
+ const ps=S.settings.pinterest||{};
+ try{
+  const r=await fetchWithT('https://api.pinterest.com/v5/oauth/token',{method:'POST',headers:{'Authorization':'Basic '+btoa(ps.appId+':'+ps.appSecret),'Content-Type':'application/x-www-form-urlencoded'},body:'grant_type=authorization_code&code='+encodeURIComponent(code)+'&redirect_uri='+encodeURIComponent(pinRedirect())},30000);
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok||!j.access_token)throw new Error(j.message||j.detail||'HTTP '+r.status);
+  S.pinAuth={token:j.access_token,refresh:j.refresh_token||'',expiresAt:Date.now()+(+j.expires_in||2592000)*1000,user:null};
+  try{const me=await pinApi('/user_account');S.pinAuth.user=me.username||null;}catch(e){}
+  save();renderSidebar();renderAll();SND.ok();
+  toast('Pinterest подключён 🎉',S.pinAuth.user?('аккаунт @'+S.pinAuth.user+' — публикация пинов работает'):'токен получен','ok');
+ }catch(e){
+  toast('Не удалось получить токен',String(e.message||e).slice(0,120),'bad');
+ }
+}
+function pinUnauth(){S.pinAuth={token:'',refresh:'',expiresAt:0,user:null};save();renderSidebar();closeModal();toast('Pinterest отключён','Токен удалён из этого браузера','info');}
+async function publishPinApi(c){
+ try{
+  toast('Создаю пин в Pinterest…','','info');
+  const remote=c.images.map(i=>i.src).find(s=>/^https?:\/\//i.test(s));
+  if(!remote){toast('Пин не создан','Для публикации через API нужна картинка по прямой ссылке (импорт пина или ссылка)','warn');return;}
+  const boards=await pinApi('/boards');
+  const b=(boards.items||[])[0];
+  if(!b){toast('Пин не создан','В аккаунте Pinterest нет ни одной доски — создайте доску','warn');return;}
+  await pinApi('/pins',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({board_id:b.id,title:(c.text.split('\n')[0]||'Пин').slice(0,97),description:c.text.slice(0,497),media_source:{source_type:'image_url',url:remote}})});
+  confetti(document.body);SND.ok();
+  toast('Пин опубликован в Pinterest ✅','доска «'+esc(b.name)+'»','ok',undefined);
+ }catch(e){SND.err();toast('Ошибка Pinterest API',String(e.message||e).slice(0,140),'bad');}
+}
+function oauthCapture(){
+ try{
+  const q=new URLSearchParams(location.search);
+  const code=q.get('code'),state=q.get('state');
+  if(!code)return;
+  const saved=sessionStorage.getItem('pinpost_oauth_state');
+  if(state&&saved&&state!==saved)q.set('error','state_mismatch');
+  if(q.get('error')){toast('Вход в Pinterest отменён',q.get('error_description')||q.get('error'),'warn');}
+  else if(code){history.replaceState({},'',location.pathname+location.hash);pinExchange(code);return;}
+  history.replaceState({},'',location.pathname+location.hash);
+ }catch(e){}
+}
+function openComposers(c){
+ const remote=c.images.map(i=>i.src).find(s=>/^https?:\/\//i.test(s));
+ const items=c.platforms.filter(x=>P[x]&&COMPOSERS[x]);
+ if(!items.length){toast('Нет площадок','Подключите хотя бы одну','warn');return;}
+ openModal(`<div class="mhead"><h3 style="font-size:14px">Публикация в редакторах соцсетей</h3><div class="spacer"></div><button class="icobtn" data-act="closemodal" aria-label="Закрыть">${ICON.x}</button></div>
+  <div class="mbody" style="width:min(480px,92vw)">
+   <div class="hint" style="margin-bottom:12px">Текст скопирован в буфер обмена — в каждом редакторе вставьте его (Ctrl+V) и приложите картинки. Без официального API соцсети панель не может загрузить файлы и нажать «Опубликовать» за вас — финальный клик за вами.</div>
+   <div style="display:grid;gap:7px">${items.map(x=>`<button class="btn block" data-act="opencomp" data-id="${x}" style="justify-content:flex-start">${P[x].icon}${P[x].name}<span class="hint" style="margin-left:auto">${x==='x'?'текст до 280 симв.':x==='fb'&&remote?'с картинкой':''}</span></button>`).join('')}</div>
+   <button class="btn ghost block" style="margin-top:10px" data-act="copytext">${ICON.copy}Скопировать текст ещё раз</button>
+  </div>`);
+}
 function publish(){
  const c=cur(),v=validate();
  if(!v.ok){toast('Нельзя опубликовать',v.msg,'bad');SND.err();return;}
@@ -1147,7 +1238,10 @@ function publish(){
  setTimeout(()=>{
   const b=$('#pubBtn');if(b){b.disabled=false;}
   updateCounters();
-  toast('Опубликовано везде 🎉',c.platforms.map(k=>P[k]?P[k].name:k).join(' · '),'ok',{label:'В библиотеку',fn:()=>{setView('library');openDrawer(c.id);}});
+  const txt=c.text||'';
+  if(navigator.clipboard&&navigator.clipboard.writeText&&txt)navigator.clipboard.writeText(txt).catch(()=>fallbackCopy(txt));
+  toast('Опубликовано везде 🎉',c.platforms.map(k=>P[k]?P[k].name:k).join(' · '),'ok',{label:'Открыть редакторы',fn:()=>openComposers(c)});
+  if(S.pinAuth&&S.pinAuth.token&&c.platforms.includes('pin'))publishPinApi(c);
  },650);
 }
 function schedule(){
@@ -1347,8 +1441,8 @@ function aiApply(i){
  toast('Вариант применён','','ok',{label:'Отменить',fn:doUndo});
 }
 function openSettingsModal(msg){
- const st=S.settings;
- openModal(`<div class="mhead"><span style="color:var(--crimson)">${ICON.gear}</span><h3 style="font-size:14px">Настройки ИИ</h3><div class="spacer"></div><button class="icobtn" data-act="closemodal">${ICON.x}</button></div>
+ const st=S.settings,ps=st.pinterest||{},defRedirect=pinRedirect();
+ openModal(`<div class="mhead"><span style="color:var(--crimson)">${ICON.gear}</span><h3 style="font-size:14px">Настройки</h3><div class="spacer"></div><button class="icobtn" data-act="closemodal">${ICON.x}</button></div>
   <div class="mbody" style="width:min(460px,92vw)">
    ${msg?`<div class="hint" style="color:var(--warn);margin-bottom:10px">${esc(msg)}</div>`:''}
    <div class="stform">
@@ -1358,19 +1452,32 @@ function openSettingsModal(msg){
     <div class="row"><div style="flex:1"><div class="lbl">Вариантов текста</div><input class="field" id="stVars" type="number" min="1" max="5" value="${st.variants}"></div>
      <div style="flex:2"><div class="lbl">Тон</div><select class="field" id="stTone">${TONES.map(t=>`<option ${st.tone===t?'selected':''}>${t}</option>`).join('')}</select></div></div>
    </div>
+   <div class="sep"></div>
+   <div class="lbl" style="margin-bottom:8px">Pinterest API — настоящая авторизация</div>
+   <div class="stform">
+    <div><div class="lbl">App ID</div><input class="field" id="stPinApp" value="${esc(ps.appId)}" placeholder="из developers.pinterest.com"></div>
+    <div><div class="lbl">App secret</div><input class="field" id="stPinSecret" type="password" value="" placeholder="${ps.appSecret?'••••• (сохранён — оставьте пустым)':'секрет приложения'}"></div>
+    <div><div class="lbl">Redirect URI</div><input class="field" id="stPinRedirect" value="${esc(ps.redirect)}" placeholder="${esc(defRedirect)}"></div>
+   </div>
+   <div class="row" style="margin-top:10px;flex-wrap:wrap">
+    <button class="btn primary" data-act="pinoauth" style="flex:1">${ICON.link}Подключить Pinterest</button>
+    ${S.pinAuth&&S.pinAuth.token?`<button class="btn danger" data-act="pinunauth" style="flex:1">Отключить</button>`:''}
+   </div>
+   ${S.pinAuth&&S.pinAuth.user?`<div class="hint" style="color:var(--ok);margin-top:8px">✓ Аккаунт Pinterest подключён: @${esc(S.pinAuth.user)}${S.pinAuth.expiresAt?' · до '+DT.format(S.pinAuth.expiresAt):''}</div>`:`<div class="hint" style="margin-top:8px">Создайте бесплатное приложение на developers.pinterest.com, скопируйте App ID и secret, укажите тот же Redirect URI (${esc(defRedirect)}) в настройках приложения — панель разместит вас через OAuth и будет публиковать пины напрямую.</div>`}
    <p class="hint" style="margin:10px 0 0">Ключ никуда не отправляется, кроме вашего API-сервиса, и хранится в localStorage этого браузера.</p>
    <button class="btn primary block" style="margin-top:12px" data-act="savesettings">${ICON.check}Сохранить</button>
   </div>`);
  setTimeout(()=>{const e=$('#stBase');if(e&&!st.apiKey)e.focus();},60);
 }
 function saveSettings(){
- const k=$('#stKey').value.trim();
+ const k=$('#stKey').value.trim(),pk=$('#stPinSecret')?$('#stPinSecret').value.trim():'';
  S.settings={apiBase:$('#stBase').value.trim()||S.settings.apiBase,
   apiKey:k||S.settings.apiKey,
   model:$('#stModel').value.trim()||S.settings.model,
-  variants:clamp(+$('#stVars').value||3,1,5),tone:$('#stTone').value};
+  variants:clamp(+$('#stVars').value||3,1,5),tone:$('#stTone').value,
+  pinterest:{appId:$('#stPinApp').value.trim(),appSecret:pk||S.settings.pinterest.appSecret,redirect:$('#stPinRedirect').value.trim()}};
  save();closeModal();SND.save();
- toast('Настройки ИИ сохранены',S.settings.model+' · '+S.settings.apiBase.replace(/^https?:\/\//,''),'ok');
+ toast('Настройки сохранены',S.settings.model+' · '+(S.settings.pinterest.appId?'Pinterest: '+S.settings.pinterest.appId:'без Pinterest API'),'ok');
 }
 /* ==================== PINTEREST IMPORT ==================== */
 const PROXIES=[
@@ -1546,6 +1653,8 @@ document.addEventListener('click',e=>{
   case'pvprev':{const c=cur();S.previewIdx=(S.previewIdx-1+c.images.length)%c.images.length;renderPreview();SND.tap();break;}
   case'pvnext':{const c=cur();S.previewIdx=(S.previewIdx+1)%c.images.length;renderPreview();SND.tap();break;}
   case'publish':publish();break;
+  case'opencomp':{const cc=cur(),t2=cc.text||'',remote=cc.images.map(i=>i.src).find(s=>/^https?:\/\//i.test(s));window.open(COMPOSERS[id](t2,remote),'_blank');SND.tap();break;}
+  case'opencomps':{const cc=cur(),t2=cc.text||'';if(t2&&navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t2).catch(()=>fallbackCopy(t2));openComposers(cc);break;}
   case'schedule':schedule();break;
   case'savedraft':{const c=cur();c.status='draft';c.scheduledAt=null;touch();renderAll();save();SND.save();toast('Черновик сохранён','','ok');break;}
   case'quick':{const d=new Date();
@@ -1565,6 +1674,8 @@ document.addEventListener('click',e=>{
   case'mic':startDictation();break;
   case'settings':openSettingsModal();break;
   case'savesettings':saveSettings();break;
+  case'pinoauth':startPinOauth();break;
+  case'pinunauth':pinUnauth();break;
   case'addurl':{const v2=$('#urlIn')?$('#urlIn').value.trim():'';
    if(!isHttpUrl(v2)){toast('Нужна ссылка http(s)','','bad');break;}
    const u2=cur();u2.images.push({id:uid(),src:v2,w:600,h:800,title:'По ссылке',alt:'',seed:Math.floor(Math.random()*90)});
@@ -1576,6 +1687,7 @@ document.addEventListener('click',e=>{
    <button data-act="importurl">${ICON.link}Импорт пина по ссылке</button>
    <button data-act="upload">${ICON.up}Загрузить с устройства</button>
    <button data-act="copytext">${ICON.copy}Копировать текст</button>
+   <button data-act="opencomps">${ICON.up}Открыть редакторы соцсетей</button>
    <button data-act="dltxt">${ICON.down}Скачать .txt</button>
    <button data-act="exportcur">${ICON.down}Экспорт JSON</button>
    <button data-act="dupcur">${ICON.copy}Дублировать пост</button>
@@ -1754,7 +1866,7 @@ $('#pinScroll').addEventListener('scroll',()=>{
 $('#modalRoot').addEventListener('click',e=>{if(e.target.id==='modalRoot')closeModal();});
 addEventListener('resize',debounce(()=>{closePop();if(innerWidth>=1400)$('#app').dataset.preview='0';if(innerWidth>=1120)$('#app').dataset.sidebar='0';if(innerWidth>=860)$('#app').dataset.pins='0';},160));
 /* ==================== BOOT ==================== */
-load();applyTheme();loadComposer();renderAll();
+load();oauthCapture();applyTheme();loadComposer();renderAll();
 $('#undoBtn').disabled=true;
 setTimeout(()=>{
  if(!S.settings.apiKey)toast('Советы для быстрого старта','⚙️ Настройки ИИ · булавка = импорт пина по ссылке · Ctrl+V со ссылкой на пин','info');
